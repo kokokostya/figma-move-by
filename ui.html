@@ -9,13 +9,18 @@
 
       body {
         font-family: Inter, sans-serif;
-        margin: 16px;
+        margin: 0;
         color: #111;
+      }
+
+      #app {
+        padding: 16px;
       }
 
       .inputs {
         display: flex;
         gap: 8px;
+        margin-bottom: 10px;
       }
 
       .input-wrapper {
@@ -42,22 +47,41 @@
         font-size: 13px;
       }
 
-      .history {
+      #history {
         display: flex;
         flex-wrap: wrap;
         gap: 6px;
-        margin-top: 10px;
+        margin-bottom: 10px;
+      }
+
+      #history:empty {
+        display: none;
+        margin-bottom: 0;
       }
 
       .pill {
-        padding: 3px 8px;
+        display: inline-flex;
+        align-items: center;
         border: 1px solid #dde;
         border-radius: 6px;
         background: #d6ebff;
         font-size: 11px;
         color: #333;
-        cursor: pointer;
         line-height: 1.4;
+        overflow: hidden;
+      }
+
+      .pill button {
+        border: 0;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+        font: inherit;
+        line-height: 1.4;
+      }
+
+      .pill-shortcut {
+        padding: 3px 3px 3px 8px;
       }
 
       .pill:hover {
@@ -66,11 +90,43 @@
         color: #111;
       }
 
+      .pill:has(.pill-remove:hover) {
+        background: #d6ebff;
+        border-color: #dde;
+        color: #333;
+      }
+
+      .pill-remove {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        align-self: stretch;
+        padding: 0 6px 0 3px;
+      }
+
+      .pill .pill-remove {
+        color: #88a;
+      }
+
+      .pill .pill-remove:hover {
+        color: #111;
+      }
+
+      .pill-remove svg {
+        width: 12px;
+        height: 12px;
+      }
+
+      .pill-remove path {
+        stroke: currentColor;
+        stroke-width: 1.4;
+        stroke-linecap: round;
+      }
+
       .checkbox-row {
         display: flex;
         align-items: center;
         gap: 8px;
-        margin-top: 12px;
       }
 
       .checkbox-row input[type="checkbox"] {
@@ -105,64 +161,187 @@
   </head>
 
   <body>
-    <div class="inputs">
-      <div class="input-wrapper">
-        <span class="icon">
-          <svg id="angle-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style="transition: transform 0.1s;">
-            <path d="M7 12V2M4.5 4.5L7 2L9.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        <input id="angle" type="number" value="0" step="5" />
+    <div id="app">
+      <div class="inputs">
+        <div class="input-wrapper">
+          <span class="icon">
+            <svg id="angle-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style="transition: transform 0.1s;">
+              <path d="M7 12V2M4.5 4.5L7 2L9.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <input id="angle" type="number" value="0" step="5" />
+        </div>
+        <div class="input-wrapper">
+          <span class="icon">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M2 7H12M2 7L4.5 4.5M2 7L4.5 9.5M12 7L9.5 4.5M12 7L9.5 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <input id="distance" type="number" value="10" step="1" />
+        </div>
       </div>
-      <div class="input-wrapper">
-        <span class="icon">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M2 7H12M2 7L4.5 4.5M2 7L4.5 9.5M12 7L9.5 4.5M12 7L9.5 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        <input id="distance" type="number" value="10" step="1" />
+
+      <div id="history"></div>
+
+      <div class="checkbox-row">
+        <input id="moveCopy" type="checkbox" />
+        <label for="moveCopy">Move a copy</label>
       </div>
-    </div>
 
-    <div id="history" class="history"></div>
-
-    <div class="checkbox-row">
-      <input id="moveCopy" type="checkbox" />
-      <label for="moveCopy">Move a copy</label>
-    </div>
-
-    <div class="buttons">
-      <button class="primary" id="move">Move</button>
+      <div class="buttons">
+        <button class="primary" id="move">Move</button>
+      </div>
     </div>
 
     <script>
+      const appEl = document.getElementById('app');
       const angleInput = document.getElementById('angle');
       const distanceInput = document.getElementById('distance');
       const moveCopyInput = document.getElementById('moveCopy');
       const angleIcon = document.getElementById('angle-icon');
       const historyEl = document.getElementById('history');
+      let currentHistory = [];
+      let previewFrame = null;
 
       function updateAngleIcon(deg) {
         angleIcon.style.transform = `rotate(${deg}deg)`;
       }
 
+      function postPreview() {
+        if (previewFrame !== null) {
+          cancelAnimationFrame(previewFrame);
+        }
+
+        previewFrame = requestAnimationFrame(() => {
+          previewFrame = null;
+          parent.postMessage(
+            {
+              pluginMessage: {
+                type: 'preview',
+                angle: parseFloat(angleInput.value),
+                distance: parseFloat(distanceInput.value)
+              }
+            },
+            '*'
+          );
+        });
+      }
+
       function renderHistory(history) {
         historyEl.innerHTML = '';
         history.forEach(({ angle, distance }) => {
-          const pill = document.createElement('button');
+          const pill = document.createElement('div');
+          const shortcutButton = document.createElement('button');
+          const removeButton = document.createElement('button');
+
           pill.className = 'pill';
-          pill.textContent = `${angle}° ▸ ${distance}px`;
-          pill.addEventListener('click', () => {
+          shortcutButton.className = 'pill-shortcut';
+          shortcutButton.type = 'button';
+          shortcutButton.textContent = `${angle}° ▸ ${distance}px`;
+          shortcutButton.addEventListener('click', () => {
             angleInput.value = angle;
             distanceInput.value = distance;
             updateAngleIcon(angle);
+            postPreview();
           });
+
+          removeButton.className = 'pill-remove';
+          removeButton.type = 'button';
+          removeButton.setAttribute('aria-label', `Remove ${angle} degree ${distance}px shortcut`);
+          removeButton.innerHTML = `
+            <svg viewBox="0 0 10 10" aria-hidden="true" focusable="false">
+              <path d="M2 2L8 8M8 2L2 8"/>
+            </svg>
+          `;
+          removeButton.addEventListener('click', () => {
+            currentHistory = currentHistory.filter(
+              item => !(item.angle === angle && item.distance === distance)
+            );
+            renderHistory(currentHistory);
+            resizeToContent();
+            parent.postMessage(
+              {
+                pluginMessage: {
+                  type: 'remove-history',
+                  angle,
+                  distance
+                }
+              },
+              '*'
+            );
+          });
+
+          pill.appendChild(shortcutButton);
+          pill.appendChild(removeButton);
           historyEl.appendChild(pill);
+        });
+      }
+
+      function resizeToContent() {
+        requestAnimationFrame(() => {
+          parent.postMessage(
+            {
+              pluginMessage: {
+                type: 'resize-ui',
+                height: Math.ceil(appEl.getBoundingClientRect().height)
+              }
+            },
+            '*'
+          );
         });
       }
 
       angleInput.addEventListener('input', () => {
         updateAngleIcon(parseFloat(angleInput.value) || 0);
+        postPreview();
+      });
+
+      angleInput.addEventListener('keydown', (event) => {
+        if (!event.shiftKey) {
+          return;
+        }
+
+        const direction = event.key === 'ArrowUp'
+          ? 1
+          : event.key === 'ArrowDown'
+            ? -1
+            : 0;
+
+        if (direction === 0) {
+          return;
+        }
+
+        event.preventDefault();
+
+        const angle = parseFloat(angleInput.value) || 0;
+        const nextAngle = angle + direction * 15;
+        angleInput.value = nextAngle;
+        updateAngleIcon(nextAngle);
+        postPreview();
+      });
+
+      distanceInput.addEventListener('input', postPreview);
+
+      distanceInput.addEventListener('keydown', (event) => {
+        if (!event.shiftKey) {
+          return;
+        }
+
+        const direction = event.key === 'ArrowUp'
+          ? 1
+          : event.key === 'ArrowDown'
+            ? -1
+            : 0;
+
+        if (direction === 0) {
+          return;
+        }
+
+        event.preventDefault();
+
+        const distance = parseFloat(distanceInput.value) || 0;
+        distanceInput.value = distance + direction * 10;
+        postPreview();
       });
 
       window.onmessage = (event) => {
@@ -176,8 +355,12 @@
           updateAngleIcon(msg.angle);
 
           if (msg.history && msg.history.length > 0) {
-            renderHistory(msg.history);
+            currentHistory = msg.history;
+            renderHistory(currentHistory);
           }
+
+          resizeToContent();
+          postPreview();
 
           distanceInput.focus();
           distanceInput.select();

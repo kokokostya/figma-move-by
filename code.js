@@ -3,8 +3,93 @@ const DEFAULT_DISTANCE = 10;
 const DEFAULT_MOVE_COPY = false;
 
 const MAX_HISTORY = 5;
-const BASE_HEIGHT = 148;
-const HISTORY_HEIGHT = 56; // margin + 2 rows of pills + gap
+const UI_WIDTH = 280;
+const INITIAL_UI_HEIGHT = 148;
+const PREVIEW_OPACITY = 0.35;
+
+let previewNodes = [];
+let lastPreview = {
+  angle: DEFAULT_ANGLE,
+  distance: DEFAULT_DISTANCE
+};
+
+function getMoveDelta(angle, distance) {
+  // 0° = up, 90° = right. Convert to Cartesian coordinates.
+  const radians = ((angle - 90) * Math.PI) / 180;
+
+  return {
+    dx: Math.cos(radians) * distance,
+    dy: Math.sin(radians) * distance
+  };
+}
+
+function canMoveNode(node) {
+  return 'x' in node && 'y' in node;
+}
+
+function cloneIntoOriginalParent(node) {
+  if (!('clone' in node) || typeof node.clone !== 'function') {
+    return null;
+  }
+
+  const clone = node.clone();
+  const originalParent = node.parent;
+
+  if (originalParent && 'insertChild' in originalParent) {
+    const index = originalParent.children.indexOf(node);
+    originalParent.insertChild(index + 1, clone);
+  }
+
+  clone.x = node.x;
+  clone.y = node.y;
+
+  return clone;
+}
+
+function removePreview() {
+  for (const node of previewNodes) {
+    if (node.removed) {
+      continue;
+    }
+
+    node.remove();
+  }
+
+  previewNodes = [];
+}
+
+function renderPreview(angle, distance) {
+  lastPreview = { angle, distance };
+  removePreview();
+
+  const { dx, dy } = getMoveDelta(angle, distance);
+
+  for (const node of figma.currentPage.selection) {
+    if (!canMoveNode(node)) {
+      continue;
+    }
+
+    const preview = cloneIntoOriginalParent(node);
+
+    if (!preview) {
+      continue;
+    }
+
+    preview.x += dx;
+    preview.y += dy;
+    preview.name = `[Move by preview] ${node.name}`;
+
+    if ('opacity' in preview) {
+      preview.opacity *= PREVIEW_OPACITY;
+    }
+
+    if ('locked' in preview) {
+      preview.locked = true;
+    }
+
+    previewNodes.push(preview);
+  }
+}
 
 async function init() {
   const savedAngle = await figma.clientStorage.getAsync('moveByAngle');
@@ -15,8 +100,8 @@ async function init() {
   const history = Array.isArray(savedHistory) ? savedHistory : [];
 
   figma.showUI(__html__, {
-    width: 280,
-    height: history.length > 0 ? BASE_HEIGHT + HISTORY_HEIGHT : BASE_HEIGHT,
+    width: UI_WIDTH,
+    height: INITIAL_UI_HEIGHT,
     title: 'Move by...'
   });
 
@@ -37,7 +122,42 @@ async function init() {
 
 init();
 
+figma.on('selectionchange', () => {
+  renderPreview(lastPreview.angle, lastPreview.distance);
+});
+
+figma.on('close', () => {
+  removePreview();
+});
+
 figma.ui.onmessage = async (msg) => {
+  if (msg.type === 'resize-ui') {
+    const height = Math.max(1, Math.ceil(Number(msg.height) || 0));
+    figma.ui.resize(UI_WIDTH, height);
+    return;
+  }
+
+  if (msg.type === 'preview') {
+    const angle = Number(msg.angle) || 0;
+    const distance = Number(msg.distance) || 0;
+
+    renderPreview(angle, distance);
+    return;
+  }
+
+  if (msg.type === 'remove-history') {
+    const angle = Number(msg.angle) || 0;
+    const distance = Number(msg.distance) || 0;
+    const savedHistory = await figma.clientStorage.getAsync('moveByHistory');
+    const history = Array.isArray(savedHistory) ? savedHistory : [];
+    const updated = history.filter(
+      item => !(item.angle === angle && item.distance === distance)
+    );
+
+    await figma.clientStorage.setAsync('moveByHistory', updated);
+    return;
+  }
+
   if (msg.type === 'move') {
     const angle = Number(msg.angle) || 0;
     const distance = Number(msg.distance) || 0;
@@ -56,6 +176,8 @@ figma.ui.onmessage = async (msg) => {
     ].slice(0, MAX_HISTORY);
     await figma.clientStorage.setAsync('moveByHistory', updated);
 
+    removePreview();
+
     const selection = figma.currentPage.selection;
 
     if (selection.length === 0) {
@@ -64,13 +186,7 @@ figma.ui.onmessage = async (msg) => {
       return;
     }
 
-    // 0° = up
-    // 90° = right
-    // Convert to Cartesian coordinates
-    const radians = ((angle - 90) * Math.PI) / 180;
-
-    const dx = Math.cos(radians) * distance;
-    const dy = Math.sin(radians) * distance;
+    const { dx, dy } = getMoveDelta(angle, distance);
 
     const movedNodes = [];
 
@@ -82,23 +198,9 @@ figma.ui.onmessage = async (msg) => {
       let target = node;
 
       if (moveCopy) {
-        if ('clone' in node && typeof node.clone === 'function') {
-          target = node.clone();
+        target = cloneIntoOriginalParent(node);
 
-          // clone() places the copy at the page level regardless of where
-          // the original lives. Re-parent it into the original's container,
-          // right above the original in z-order.
-          const originalParent = node.parent;
-          if (originalParent && 'insertChild' in originalParent) {
-            const index = originalParent.children.indexOf(node);
-            originalParent.insertChild(index + 1, target);
-          }
-
-          // Now that clone and original share the same parent,
-          // x/y are in the same coordinate space — direct assignment works.
-          target.x = node.x;
-          target.y = node.y;
-        } else {
+        if (!target) {
           continue;
         }
       }
@@ -123,6 +225,7 @@ figma.ui.onmessage = async (msg) => {
   }
 
   if (msg.type === 'cancel') {
+    removePreview();
     figma.closePlugin();
   }
 };

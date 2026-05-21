@@ -1,6 +1,6 @@
 {
   "name": "Move by...",
-  "id": "move-by-plugin",
+  "id": "1639257305932013122",
   "api": "1.0.0",
   "main": "code.js",
   "ui": "ui.html",
@@ -10,5 +10,6 @@
       "name": "Move by...",
       "command": "move-by"
     }
-  ]
+  ],
+  "documentAccess": "dynamic-page"
 }
