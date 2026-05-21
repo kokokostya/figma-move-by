@@ -1,0 +1,14 @@
+{
+  "name": "Move by...",
+  "id": "move-by-plugin",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "menu": [
+    {
+      "name": "Move by...",
+      "command": "move-by"
+    }
+  ]
+}
