@@ -3,7 +3,7 @@ const DEFAULT_DISTANCE = 10;
 const DEFAULT_MOVE_COPY = false;
 
 const MAX_HISTORY = 5;
-const UI_WIDTH = 280;
+const UI_WIDTH = 400;
 const INITIAL_UI_HEIGHT = 148;
 const PREVIEW_OPACITY = 0.35;
 
@@ -116,13 +116,18 @@ async function init() {
       typeof savedMoveCopy === 'boolean'
         ? savedMoveCopy
         : DEFAULT_MOVE_COPY,
-    history
+    history,
+    hasSelection: figma.currentPage.selection.length > 0
   });
 }
 
 init();
 
 figma.on('selectionchange', () => {
+  figma.ui.postMessage({
+    type: 'selection-state',
+    hasSelection: figma.currentPage.selection.length > 0
+  });
   renderPreview(lastPreview.angle, lastPreview.distance);
 });
 

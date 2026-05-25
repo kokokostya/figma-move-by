@@ -113,14 +113,32 @@
       .pill button {
         border: 0;
         background: transparent;
-        color: inherit;
         cursor: pointer;
         font: inherit;
         line-height: 1.4;
       }
 
       .pill-shortcut {
-        padding: 3px 3px 3px 8px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 3px 3px 6px;
+      }
+
+      .pill-part {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+      }
+
+      .pill-icon {
+        display: inline-flex;
+        color: #8a8a8a;
+      }
+
+      .pill-icon svg {
+        width: 12px;
+        height: 12px;
       }
 
       .pill:hover {
@@ -141,13 +159,10 @@
         justify-content: center;
         align-self: stretch;
         padding: 0 6px 0 3px;
+        color: #8a8a8a;
       }
 
-      .pill .pill-remove {
-        color: #88a;
-      }
-
-      .pill .pill-remove:hover {
+      .pill-remove:hover {
         color: #111;
       }
 
@@ -196,6 +211,12 @@
       button.primary:hover {
         background: #0893f0;
       }
+
+      button.primary:disabled {
+        background: #bbb;
+        cursor: not-allowed;
+        opacity: 0.7;
+      }
     </style>
   </head>
 
@@ -239,6 +260,7 @@
       const angleInput = document.getElementById('angle');
       const distanceInput = document.getElementById('distance');
       const moveCopyInput = document.getElementById('moveCopy');
+      const moveButton = document.getElementById('move');
       const angleIcon = document.getElementById('angle-icon');
       const historyEl = document.getElementById('history');
       let currentHistory = [];
@@ -286,7 +308,24 @@
           pill.className = 'pill';
           shortcutButton.className = 'pill-shortcut';
           shortcutButton.type = 'button';
-          shortcutButton.textContent = `${angle}° ▸ ${distance}px`;
+          shortcutButton.innerHTML = `
+            <span class="pill-part">
+              <span class="pill-icon">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style="transform: rotate(${angle}deg);">
+                  <path d="M7 12V2M4.5 4.5L7 2L9.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span>${angle}˚</span>
+            </span>
+            <span class="pill-part">
+              <span class="pill-icon">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M2 7H12M2 7L4.5 4.5M2 7L4.5 9.5M12 7L9.5 4.5M12 7L9.5 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span>${distance}px</span>
+            </span>
+          `;
           shortcutButton.addEventListener('click', () => {
             angleInput.value = angle;
             distanceInput.value = distance;
@@ -398,10 +437,16 @@
       window.onmessage = (event) => {
         const msg = event.data.pluginMessage;
 
+        if (msg.type === 'selection-state') {
+          moveButton.disabled = !msg.hasSelection;
+          return;
+        }
+
         if (msg.type === 'init') {
           angleInput.value = msg.angle;
           distanceInput.value = msg.distance;
           moveCopyInput.checked = msg.moveCopy;
+          moveButton.disabled = !msg.hasSelection;
 
           updateAngleIcon(msg.angle);
 
