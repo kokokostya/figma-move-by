@@ -1,15 +1,9 @@
 {
   "name": "Move by...",
-  "id": "1639257305932013122",
+  "id": "1639636326536704869",
   "api": "1.0.0",
   "main": "code.js",
   "ui": "ui.html",
   "editorType": ["figma"],
-  "menu": [
-    {
-      "name": "Move by...",
-      "command": "move-by"
-    }
-  ],
   "documentAccess": "dynamic-page"
 }
